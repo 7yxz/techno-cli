@@ -5,7 +5,8 @@ import sys
 from ..mirrors import find_base
 from ..utils import session, unpack_packer
 
-MIRRORS = ["https://animepahe.pw", "https://animepahe.si", "https://animepahe.ru"]
+MIRRORS = ["https://animepahe.pw", "https://animepahe.com", "https://animepahe.org",
+           "https://animepahe.si", "https://animepahe.ru"]
 # DDoS-Guard accepts these empty cookies, no manual cookie needed
 DDG = "__ddg1_=;__ddg2_=;__ddgid_=;"
 
