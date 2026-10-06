@@ -1,0 +1,97 @@
+"""Direct hianime scraper, no API server needed. Logic ported from ani-cli 5.1.x."""
+import base64
+import html as htmllib
+import json
+import os
+import re
+import sys
+from urllib.parse import urljoin, urlparse
+
+from ..utils import IMPERSONATE, session
+
+KEY = b"otaku-embed-v1"
+
+
+def unxor(blob):
+    raw = base64.b64decode(blob + "=" * (-len(blob) % 4))
+    return bytes(b ^ KEY[i % len(KEY)] for i, b in enumerate(raw)).decode("utf-8", "replace")
+
+
+class HiAnime:
+    name = "hianime"
+    in_all = True
+
+    def __init__(self):
+        self.base = os.environ.get("HIANIME_URL", "https://hianime.at").rstrip("/")
+
+    def _get(self, url, **kw):
+        r = session.get(url, timeout=20, **kw)
+        if "Just a moment" in r.text[:3000]:
+            hint = "" if IMPERSONATE else " (pip install curl_cffi to bypass)"
+            sys.exit("hianime: blocked by cloudflare" + hint)
+        r.raise_for_status()
+        return r.text
+
+    def search(self, q):
+        page = self._get(f"{self.base}/search", params={"keyword": q})
+        page = " ".join(page.split("id=\"main-sidebar\"")[0].split())
+        return [(htmllib.unescape(m.group(2)), m.group(1)) for m in re.finditer(
+            r'<h3 class="film-name">\s*<a href="[^"]*/([^"/]*)"\s*title="([^"]*)"', page)]
+
+    def episodes(self, slug):
+        num = slug.rsplit("-", 1)[-1]
+        text = self._get(f"{self.base}/api/theme/episode/list/{num}").replace("\\", "")
+        out = []
+        for chunk in text.split("ep-item")[1:]:
+            m = re.search(r'data-number="([^"]*)".*?data-id="(\d+)".*?/watch/'
+                          + re.escape(slug) + r"\?ep=", chunk, re.S)
+            if m:
+                out.append((f"Episode {m.group(1)}", m.group(2)))
+        return out
+
+    def stream(self, _slug, ep_id, quality, dub=False):
+        mode = "dub" if dub else "sub"
+        servers = self._get(f"{self.base}/api/theme/episode/servers",
+                            params={"episodeId": ep_id}).replace('\\"', '"')
+        h = None
+        for chunk in servers.split("server-item")[1:]:
+            m = re.search(r'data-type="%s".*?data-server-name="ZokoAnime".*?data-hash="([^"]*)"' % mode,
+                          chunk, re.S)
+            if m:
+                h = m.group(1)
+                break
+        if not h:
+            sys.exit(f"hianime: no {mode} source for this episode")
+        embed = base64.b64decode(h + "=" * (-len(h) % 4)).decode()
+        u = urlparse(embed)
+        refr = f"{u.scheme}://{u.netloc}/"
+        page = self._get(embed)
+        m = re.search(r'window\.__P="([^"]*)"', page)
+        if not m:
+            sys.exit("hianime: embed config not found (layout changed)")
+        text = unxor(m.group(1))
+        m = re.search(r'"src":"([^"]*\.m3u8[^"]*)"', text)
+        if not m:
+            sys.exit("hianime: no m3u8 in embed config")
+        master = m.group(1).replace("\\/", "/")
+        sub = None
+        try:
+            subs = json.loads(text).get("subtitles") or []
+            sub = next((s["src"] for s in subs if s.get("default")), None)
+        except Exception:
+            pass
+        url = master
+        try:  # pick closest quality from the master playlist
+            lines = self._get(master, headers={"Referer": refr}).splitlines()
+            variants = []
+            for i, l in enumerate(lines):
+                r = re.search(r"RESOLUTION=\d+x(\d+)", l)
+                if l.startswith("#EXT-X-STREAM-INF") and r and i + 1 < len(lines):
+                    variants.append((int(r.group(1)), urljoin(master, lines[i + 1].strip())))
+            if variants:
+                url = min(variants, key=lambda v: abs(v[0] - quality))[1]
+        except SystemExit:
+            raise
+        except Exception:
+            pass
+        return url, {"Referer": refr}, sub
