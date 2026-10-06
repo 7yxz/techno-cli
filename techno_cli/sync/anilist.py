@@ -1,4 +1,5 @@
 import os
+import re
 
 import requests
 
@@ -35,7 +36,9 @@ class AniList:
         cfg["anilist_client_id"] = cid
         console.print("\nOpen this URL, approve, and copy the token shown:\n"
                       f"[cyan]https://anilist.co/api/v2/oauth/authorize?client_id={cid}&response_type=token[/]\n")
-        return {"token": Prompt.ask("Token", password=True).strip()}
+        raw = os.environ.get("TECHNO_TOKEN") or Prompt.ask("Token (visible so pasting works)")
+        m = re.search(r"access_token=([^&\s]+)", raw)  # also accepts the full redirect URL
+        return {"token": (m.group(1) if m else raw).strip().strip("\"'")}
 
     def whoami(self):
         return self._q("query { Viewer { name } }")["Viewer"]["name"]

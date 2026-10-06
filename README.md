@@ -53,6 +53,10 @@ Tokens live in `~/.config/techno-cli/config.json` (chmod 600). Progress only mov
 
 While playing, Discord shows the anime, episode and provider with a button to this repo. Needs the Discord desktop app running. `--no-rpc` turns it off for a run.
 
+## Automatic fallback
+
+If the chosen provider fails (search or stream), techno-cli quietly tries the others and only shows an error when all of them fail. Working mirrors are remembered in the config, so cookies and URLs need no manual setup.
+
 ## Providers
 
 - animepahe: finds a working mirror and handles the DDoS-Guard cookie by itself.

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "techno-cli"
-version = "0.5.0"
+version = "0.6.1"
 description = "ani-cli style multi-provider anime player for the terminal"
 readme = "README.md"
 requires-python = ">=3.8"

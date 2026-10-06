@@ -1,4 +1,5 @@
 import argparse
+import difflib
 import os
 import re
 import sys
@@ -41,6 +42,7 @@ def build_parser():
     ap.add_argument("-q", "--quality", type=int, default=1080, help="preferred quality (default 1080)")
     ap.add_argument("-e", "--episode", help="start at this episode number")
     ap.add_argument("--login", choices=TRACKERS, metavar="TRACKER", help="log in to anilist, mal or kitsu")
+    ap.add_argument("--token", help="AniList token to use with --login anilist (skips the prompt)")
     ap.add_argument("--logout", choices=TRACKERS, metavar="TRACKER", help="log out of a tracker")
     ap.add_argument("--rpc-setup", action="store_true", help="set up Discord Rich Presence")
     ap.add_argument("--no-rpc", action="store_true", help="disable Discord Rich Presence this run")
@@ -51,6 +53,80 @@ def build_parser():
     ap.add_argument("-v", "--version", action="version", version=f"techno-cli {__version__}")
     ap.add_argument("-h", "-help", "--help", action="help", help="show this help and exit")
     return ap
+
+
+FALLBACKS = [n for n in PROVIDERS if n != "aniwatch" or os.environ.get("HIANIME_API")]
+
+
+def _msg(e):
+    m = e.code if isinstance(e, SystemExit) else e
+    return str(m or type(e).__name__)[:120]
+
+
+def _sim(a, b):
+    n = lambda x: re.sub(r"[^a-z0-9 ]", "", re.sub(r"\(.*?\)", "", x.lower())).strip()
+    return difflib.SequenceMatcher(None, n(a), n(b)).ratio()
+
+
+def search_providers(q, a):
+    """Search the chosen provider; if it fails or finds nothing, quietly try the others."""
+    if a.all:
+        names = [n for n, c in PROVIDERS.items() if c.in_all]
+    else:
+        names = [a.provider] + [n for n in FALLBACKS if n != a.provider]
+    results, errs = [], []
+    for n in names:
+        try:
+            with console.status(f"Searching {n}..."):
+                found = PROVIDERS[n]().search(q)
+        except (Exception, SystemExit) as e:
+            errs.append((n, _msg(e)))
+            continue
+        if not found:
+            errs.append((n, "no results"))
+            continue
+        results += [(f"[{n}] {t}", (n, i, t)) for t, i in found]
+        if not a.all:
+            if errs:
+                console.print(f"[dim]{errs[0][0]} failed ({errs[0][1][:60]}), using {n}[/]")
+            break
+    if not results:
+        error("all providers failed")
+        for n, m in errs:
+            console.print(f"  [dim]{n}:[/] {m}")
+        console.print("  [dim]run techno-cli --doctor for details[/]")
+        sys.exit(1)
+    return results
+
+
+def get_stream(prov, prov_name, aid, epid, label, title, a):
+    """Try the chosen provider, then the same episode on the other providers."""
+    errs = []
+    try:
+        with console.status("Fetching stream..."):
+            return prov.stream(aid, epid, a.quality, a.dub), prov_name, errs
+    except (Exception, SystemExit) as e:
+        errs.append((prov_name, _msg(e)))
+    n = ep_num(label)
+    for name in FALLBACKS if n else []:
+        if name == prov_name:
+            continue
+        try:
+            with console.status(f"Trying {name}..."):
+                p = PROVIDERS[name]()
+                res = [r for r in p.search(title) if _sim(title, r[0]) >= 0.6]
+                if not res:
+                    raise RuntimeError("no matching title")
+                best = max(res, key=lambda r: _sim(title, r[0]))
+                ep = next((e for e in p.episodes(best[1]) if ep_num(e[0]) == n), None)
+                if not ep:
+                    raise RuntimeError(f"episode {n} not found")
+                got = p.stream(best[1], ep[1], a.quality, a.dub)
+            console.print(f"[dim]{prov_name} failed, using {name}: {best[0]}[/]")
+            return got, name, errs
+        except (Exception, SystemExit) as e:
+            errs.append((name, _msg(e)))
+    return None, prov_name, errs
 
 
 def ep_num(label):
@@ -123,6 +199,8 @@ def _run():
     if a.doctor:
         return doctor()
     if a.login:
+        if a.token:
+            os.environ["TECHNO_TOKEN"] = a.token
         return login(a.login)
     if a.logout:
         return logout(a.logout)
@@ -132,16 +210,8 @@ def _run():
     find_player()
     banner(sorted(config.load().get("auth", {})) or None)
     q = " ".join(a.query) or Prompt.ask("[bold magenta]search anime[/]").strip()
-    names = [n for n, c in PROVIDERS.items() if c.in_all] if a.all else [a.provider]
 
-    results = []
-    for n in names:
-        try:
-            with console.status(f"Searching {n}..."):
-                found = PROVIDERS[n]().search(q)
-            results += [(f"[{n}] {t}", (n, i, t)) for t, i in found]
-        except (Exception, SystemExit) as e:
-            warn(f"{n}: search failed ({e})")
+    results = search_providers(q, a)
     prov_name, aid, title = pick(results, "anime")
     prov = PROVIDERS[prov_name]()
 
@@ -173,23 +243,27 @@ def _run():
         label, epid = eps[idx]
         console.rule(style="dim")
         now_playing(title, label, prov_name, a.quality, a.dub)
-        try:
-            with console.status("Fetching stream..."):
-                url, hdrs, sub = prov.stream(aid, epid, a.quality, a.dub)
-            if rpc:
-                rpc.update(title, label, prov_name)
-            pct = play(url, hdrs, f"{title} - {label}", sub)
-            if rpc:
-                rpc.clear()
-            n = ep_num(label)
-            if sy and sy.active and n and (pct < 0 or pct >= SYNC_PCT):
-                sy.update(n)
-            elif sy and sy.active and pct >= 0:
-                console.print(f"[dim]watched {pct:.0f}%, not synced (needs {SYNC_PCT:.0f}%)[/]")
-        except SystemExit as e:
-            error(e.code if isinstance(e.code, str) else "failed")
-        except Exception as e:
-            error(e)
+        got, used, errs = get_stream(prov, prov_name, aid, epid, label, title, a)
+        if not got:
+            error("all providers failed for this episode")
+            for n, m in errs:
+                console.print(f"  [dim]{n}:[/] {m}")
+            console.print("  [dim]run techno-cli --doctor for details[/]")
+        else:
+            url, hdrs, sub = got
+            try:
+                if rpc:
+                    rpc.update(title, label, used)
+                pct = play(url, hdrs, f"{title} - {label}", sub)
+                if rpc:
+                    rpc.clear()
+                n = ep_num(label)
+                if sy and sy.active and n and (pct < 0 or pct >= SYNC_PCT):
+                    sy.update(n)
+                elif sy and sy.active and pct >= 0:
+                    console.print(f"[dim]watched {pct:.0f}%, not synced (needs {SYNC_PCT:.0f}%)[/]")
+            except (Exception, SystemExit) as e:
+                error(_msg(e))
         cmd = controls()
         if cmd == "n" and idx + 1 < len(eps):
             idx += 1

@@ -2,6 +2,7 @@ import os
 import re
 import sys
 
+from ..mirrors import find_base
 from ..utils import session, unpack_packer
 
 MIRRORS = ["https://animepahe.pw", "https://animepahe.si", "https://animepahe.ru"]
@@ -20,20 +21,23 @@ class AnimePahe:
 
     @property
     def base(self):
-        """Find a working mirror automatically (PAHE_URL overrides)."""
+        """Find a working mirror and collect DDoS-Guard cookies automatically."""
         if self._base:
             return self._base
-        cands = [os.environ["PAHE_URL"].rstrip("/")] if os.environ.get("PAHE_URL") else MIRRORS
-        for m in cands:
-            try:
-                r = session.get(f"{m}/api", params={"m": "search", "q": "a"},
-                                headers=self._headers(m), timeout=15)
-                if r.status_code == 200 and "data" in r.json():
-                    self._base = m
-                    return m
+
+        def probe(m):
+            try:  # first hit sets the cookies in the session
+                session.get(m, headers=self._headers(m), timeout=15)
             except Exception:
-                continue
-        sys.exit("animepahe: no mirror reachable (blocked?). Set PAHE_URL / PAHE_COOKIE, or install curl_cffi")
+                pass
+            r = session.get(f"{m}/api", params={"m": "search", "q": "a"},
+                            headers=self._headers(m), timeout=15)
+            return r.status_code == 200 and "data" in r.json()
+
+        self._base = find_base("animepahe", MIRRORS, probe, "PAHE_URL")
+        if not self._base:
+            sys.exit("animepahe: no working mirror (blocked?)")
+        return self._base
 
     def _get(self, url, **kw):
         r = session.get(url, headers=self._headers(self.base), timeout=20, **kw)
