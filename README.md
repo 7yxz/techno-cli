@@ -90,6 +90,8 @@ Progress only moves forward, and the last episode marks the entry completed. Per
 
 ## Customize
 
+You can also pick the command name there (`command`): `techno-cli`, `tcli` or `t-cli`. It adds a small link next to the installed command, and `techno-cli` keeps working too.
+
 `techno-cli --config` opens a settings page: default provider, quality, dub, sync threshold, Discord presence, the info page and more. Choose a setting to toggle or change it. You can also press `c` on the info page between episodes. Command line flags always win over saved settings.
 
 After each episode a full-screen info page shows the anime's details from AniList (score, genres, studio, synopsis) and your progress, with the controls.
@@ -112,6 +114,8 @@ rm -rf ~/.config/techno-cli  # remove saved logins and settings
 
 ## Troubleshooting
 
+- **animepahe says no working mirror**: it is behind a Cloudflare browser check. Open animepahe in your browser, copy the `cf_clearance` cookie value from the dev tools (Application, Cookies) and run `export PAHE_COOKIE="cf_clearance=VALUE"`. It can expire, and it may not work if your browser differs from the one techno-cli imitates. hianime is usually the easier choice.
+- **allanime says keys are stale**: its API rotates keys that anipy-cli publishes. When that file is outdated allanime stops working until it is updated.
 - **Video window is blank or frozen**: press `f` on the info page. It clears the terminal and reloads the episode from the next source. If it keeps happening, open `techno-cli --config` and set `mpv_args` to something like `--hwdec=no` or `--vo=gpu`.
 - **Everything fails**: run `techno-cli --doctor` and look at which step breaks for each provider.
 - **Cloudflare blocks**: make sure `curl_cffi` is installed (`pipx inject techno-cli curl_cffi`). Providers change often, so a different one may work better today.

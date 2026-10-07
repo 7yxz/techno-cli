@@ -29,7 +29,8 @@ def _rpc(a):
 
 def build_parser():
     ap = argparse.ArgumentParser(
-        prog="techno-cli", add_help=False,
+        prog=(os.path.basename(sys.argv[0]) if os.path.basename(sys.argv[0]) in ("tcli", "t-cli") else "techno-cli"),
+        add_help=False,
         description="Watch anime from your terminal.",
         epilog="examples:\n  techno-cli naruto\n  techno-cli -p hianime one piece\n"
                "  techno-cli -a -q 720 frieren\n  techno-cli -e 5 -d bleach\n"

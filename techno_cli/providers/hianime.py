@@ -8,6 +8,7 @@ import sys
 from urllib.parse import urljoin, urlparse
 
 from ..mirrors import find_base
+from ..ui import warn
 from ..utils import IMPERSONATE, session
 
 KEY = b"otaku-embed-v1"
@@ -69,15 +70,17 @@ class HiAnime:
         mode = "dub" if dub else "sub"
         servers = self._get(f"{self.base}/api/theme/episode/servers",
                             params={"episodeId": ep_id}).replace('\\"', '"')
-        h = None
+        found = {}
         for chunk in servers.split("server-item")[1:]:
-            m = re.search(r'data-type="%s".*?data-server-name="ZokoAnime".*?data-hash="([^"]*)"' % mode,
-                          chunk, re.S)
-            if m:
-                h = m.group(1)
-                break
-        if not h:
+            t, n, hh = (re.search(r'data-%s="([^"]*)"' % k, chunk) for k in ("type", "server-name", "hash"))
+            if t and n and hh and n.group(1) == "ZokoAnime":
+                found.setdefault(t.group(1), hh.group(1))
+        kind = next((k for k in (mode, "raw", "dub" if mode == "sub" else "sub") if k in found), None)
+        if not kind:
             sys.exit(f"hianime: no {mode} source for this episode")
+        if kind != mode:
+            warn(f"hianime: no {mode} for this episode, using {kind}")
+        h = found[kind]
         embed = base64.b64decode(h + "=" * (-len(h) % 4)).decode()
         u = urlparse(embed)
         refr = f"{u.scheme}://{u.netloc}/"

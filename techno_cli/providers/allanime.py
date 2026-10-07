@@ -110,12 +110,23 @@ class AllAnime:
     def stream(self, _sid, epid, quality, dub=False):
         sid, ep = epid.split("|", 1)
         tt = "dub" if dub else "sub"
-        qh, aareq, lane, build = self._source_request()
-        r = self.s.get(API, timeout=20, params={
-            "variables": json.dumps({"showId": sid, "translationType": tt, "episodeString": ep}),
-            "extensions": _ext(qh, aaReq=aareq, k=lane)},
-            headers={"Referer": SITE, "Origin": SITE, "x-build-id": build})
-        data = self._check(r).get("data") or {}
+        for attempt in (0, 1):
+            qh, aareq, lane, build = self._source_request()
+            r = self.s.get(API, timeout=20, params={
+                "variables": json.dumps({"showId": sid, "translationType": tt, "episodeString": ep}),
+                "extensions": _ext(qh, aaReq=aareq, k=lane)},
+                headers={"Referer": SITE, "Origin": SITE, "x-build-id": build})
+            try:
+                data = self._check(r).get("data") or {}
+                break
+            except RuntimeError as e:
+                if "STALE" not in str(e):
+                    raise
+                if attempt == 0:
+                    self.keygen(refresh=True)
+                    continue
+                raise RuntimeError("allanime keys are stale upstream (the anipy-cli key file is outdated), "
+                                   "try again later")
         if "tobeparsed" in data:
             try:
                 data = self._decode_tbp(data["tobeparsed"])

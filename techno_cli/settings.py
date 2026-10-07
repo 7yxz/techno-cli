@@ -1,8 +1,9 @@
-from . import config
+from . import alias, config
 from .ui import Prompt, console, pick
 
 # key: (default, kind, choices, description)
 SCHEMA = {
+    "command": ("techno-cli", "choice", ["techno-cli", "tcli", "t-cli"], "command name to run it with"),
     "provider": ("animepahe", "choice", ["animepahe", "hianime", "allanime"], "default provider"),
     "quality": (1080, "choice", [360, 480, 720, 1080], "preferred quality"),
     "dub": (False, "bool", None, "dubbed audio by default"),
@@ -45,9 +46,15 @@ def menu():
             set_(key, not get(key))
         elif kind == "choice":
             try:
-                set_(key, pick([(str(c), c) for c in choices], key))
+                v = pick([(str(c), c) for c in choices], key)
             except SystemExit:
                 continue
+            if key == "command":
+                ok, msg = alias.apply(v)
+                console.print(("[green]ok[/] " if ok else "[red]failed[/] ") + msg)
+                if not ok:
+                    continue
+            set_(key, v)
         elif kind == "text":
             set_(key, Prompt.ask(key, default=str(get(key)), show_default=True).strip())
         else:
