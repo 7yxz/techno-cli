@@ -10,6 +10,7 @@ from rich import box
 from rich.table import Table
 
 from . import __version__, config, rpc as rpc_mod
+from .upgrade import notice, upgrade
 from .providers import DEFAULT, PROVIDERS
 from .sync import TRACKERS, Syncer, login, logout, status
 from .ui import Confirm, Prompt, banner, console, controls, error, now_playing, pick, warn
@@ -32,6 +33,7 @@ def build_parser():
                "  HIANIME_URL              override hianime mirror\n"
                "  HIANIME_API              aniwatch-api URL (default http://localhost:4000)\n"
                "  TECHNO_PLAYER            player binary (default mpv)\n"
+               "  TECHNO_NO_UPDATE_CHECK   set to stop the daily update notice\n"
                "  TECHNO_SYNC_PCT          watched % needed to sync (default 80)",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("query", nargs="*", help="search query")
@@ -46,6 +48,7 @@ def build_parser():
     ap.add_argument("--logout", choices=TRACKERS, metavar="TRACKER", help="log out of a tracker")
     ap.add_argument("--rpc-setup", action="store_true", help="set up Discord Rich Presence")
     ap.add_argument("--no-rpc", action="store_true", help="disable Discord Rich Presence this run")
+    ap.add_argument("--upgrade", "--update", action="store_true", help="upgrade techno-cli from GitHub")
     ap.add_argument("--doctor", action="store_true", help="test every provider and show what works")
     ap.add_argument("--status", action="store_true", help="show tracker login status")
     ap.add_argument("--no-sync", action="store_true", help="do not update trackers this run")
@@ -194,6 +197,8 @@ def rpc_setup():
 
 def _run():
     a = build_parser().parse_args()
+    if a.upgrade:
+        return upgrade()
     if a.rpc_setup:
         return rpc_setup()
     if a.doctor:
@@ -209,6 +214,7 @@ def _run():
 
     find_player()
     banner(sorted(config.load().get("auth", {})) or None)
+    notice()
     q = " ".join(a.query) or Prompt.ask("[bold magenta]search anime[/]").strip()
 
     results = search_providers(q, a)

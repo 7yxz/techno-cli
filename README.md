@@ -70,6 +70,12 @@ Add a provider: create a class in `techno_cli/providers/` with `search`, `episod
 
 `PAHE_URL`, `PAHE_COOKIE`, `HIANIME_URL`, `HIANIME_API`, `TECHNO_PLAYER` (default mpv)
 
+## Upgrade
+
+    techno-cli --upgrade
+
+Installs the latest version from GitHub (main branch) and also checks once a day for updates. Set `TECHNO_NO_UPDATE_CHECK=1` to turn the notice off.
+
 ## Uninstall
 
     ./uninstall.sh
