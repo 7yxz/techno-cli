@@ -1,5 +1,6 @@
 """Discord Rich Presence. Needs your own Discord application id (see --rpc-setup)."""
 import os
+import re
 import time
 
 REPO = "https://github.com/7yxz/techno-cli"
@@ -21,14 +22,30 @@ class Presence:
             self.rpc = None
             return False
 
-    def update(self, title, label, provider):
+    def update(self, title, label, provider, info=None):
         if not self._connect():
             return
+        info = info or {}
+        m = re.search(r"(\d+)(?:\.\d+)?$", label)
+        total = info.get("episodes")
+        state = (f"Episode {m.group(1)}" + (f" of {total}" if total else "")) if m else label
+        asset = os.environ.get("TECHNO_RPC_IMAGE", "techno-cli")
+        bits = ([f"{info['score'] / 10:.1f}/10"] if info.get("score") else []) + (info.get("genres") or [])[:3]
+        buttons = ([{"label": "View on AniList", "url": info["url"]}] if info.get("url") else [])
+        buttons.append({"label": "Get techno-cli", "url": REPO})
+        now = int(time.time())
+        kw = dict(details=(info.get("title") or title)[:128], state=state[:128], start=now,
+                  large_image=info.get("cover") or asset, large_text=(" | ".join(bits) or "techno-cli")[:128],
+                  small_image=asset, small_text=f"via {provider}", buttons=buttons)
+        if info.get("duration"):
+            kw["end"] = now + int(info["duration"]) * 60  # shows time left
         try:
-            self.rpc.update(
-                details=title[:128], state=f"{label} on {provider}"[:128], start=int(time.time()),
-                large_image=os.environ.get("TECHNO_RPC_IMAGE", "techno-cli"), large_text="techno-cli",
-                buttons=[{"label": "Get techno-cli", "url": REPO}])
+            from pypresence import ActivityType
+            kw["activity_type"] = ActivityType.WATCHING
+        except Exception:
+            pass
+        try:
+            self.rpc.update(**kw)
         except Exception:
             self.rpc = None
 

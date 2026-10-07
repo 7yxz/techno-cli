@@ -44,9 +44,38 @@ def now_playing(title, label, provider, quality, dub):
                         border_style=ACCENT, box=box.ROUNDED))
 
 
+CONTROLS = "[cyan]n[/]ext  [cyan]p[/]rev  [cyan]r[/]eplay  [cyan]s[/]elect  [cyan]c[/]onfig  [cyan]q[/]uit"
+
+
 def controls():
-    return Prompt.ask("[cyan]n[/]ext  [cyan]p[/]rev  [cyan]r[/]eplay  [cyan]s[/]elect  [cyan]q[/]uit",
-                      choices=["n", "p", "r", "s", "q"], default="n", show_choices=False)
+    return Prompt.ask(CONTROLS, choices=["n", "p", "r", "s", "c", "q"], default="n", show_choices=False)
+
+
+def watch_page(info, title, label, idx, total, status, synopsis=True):
+    """Full-screen info page shown after an episode. Returns the chosen control key."""
+    from rich.progress_bar import ProgressBar
+    info = info or {}
+    with console.screen():
+        console.clear()
+        head = Text()
+        head.append(info.get("title") or title, style="bold magenta")
+        if info.get("romaji") and info["romaji"] != info.get("title"):
+            head.append(f"\n{info['romaji']}", style="dim")
+        bits = [str(x) for x in (info.get("format"), info.get("year"), info.get("status"), info.get("studio")) if x]
+        if info.get("score"):
+            bits.append(f"{info['score'] / 10:.1f}/10")
+        if bits:
+            head.append("\n" + "  |  ".join(bits), style="cyan")
+        if info.get("genres"):
+            head.append("\n" + ", ".join(info["genres"]), style="dim")
+        console.print(Panel(head, border_style=ACCENT, box=box.ROUNDED, title="watching", title_align="left"))
+        if synopsis and info.get("synopsis"):
+            console.print(Panel(info["synopsis"], border_style="dim", box=box.ROUNDED, title="synopsis",
+                                title_align="left"))
+        console.print(f"\n[bold]{label}[/]  [dim]{idx + 1} of {total}[/]")
+        console.print(ProgressBar(total=total, completed=idx + 1, width=min(60, console.width - 4)))
+        console.print(f"\n[dim]{status}[/]\n")
+        return controls()
 
 
 def _pager(items, label):

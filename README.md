@@ -52,6 +52,8 @@ Controls after each episode: `n` next (default, just press Enter), `p` previous,
 | `--no-sync` | skip tracker updates for this run |
 | `--remap` | re-pick the tracker match for this anime |
 | `--rpc-setup` / `--no-rpc` | set up or disable Discord presence |
+| `--config` | customize settings on a full-screen page |
+| `--sub` | force subbed audio (overrides a dub default) |
 | `--doctor` | test every provider |
 | `-D, --discord` | open the techno-cli Discord server |
 | `--upgrade` | update to the latest version |
@@ -87,13 +89,19 @@ techno-cli --status
 
 Progress only moves forward, and the last episode marks the entry completed. Percent tracking needs mpv. Tokens are stored in `~/.config/techno-cli/config.json` (chmod 600).
 
+## Customize
+
+`techno-cli --config` opens a settings page: default provider, quality, dub, sync threshold, Discord presence, the info page and more. Choose a setting to toggle or change it. You can also press `c` on the info page between episodes. Command line flags always win over saved settings.
+
+After each episode a full-screen info page shows the anime's details from AniList (score, genres, studio, synopsis) and your progress, with the controls.
+
 ## Discord Rich Presence
 
 ```
 techno-cli --rpc-setup
 ```
 
-Paste a Discord application ID from discord.com/developers/applications. While you watch, Discord shows the anime, episode and provider. The Discord desktop app must be running. For a logo, upload an image named `techno-cli` under Rich Presence, then Art Assets.
+Paste a Discord application ID from discord.com/developers/applications. While you watch, Discord shows "Watching" with the anime's AniList cover, title, episode out of total, time left, score and genres, and a button to its AniList page (all fetched automatically, no login needed). The Discord desktop app must be running. For a logo, upload an image named `techno-cli` under Rich Presence, then Art Assets.
 
 ## Upgrade and uninstall
 

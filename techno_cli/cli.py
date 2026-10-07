@@ -11,14 +11,20 @@ from rich.table import Table
 
 import webbrowser
 
-from . import DISCORD, __version__, config, rpc as rpc_mod
+from . import DISCORD, __version__, config, meta, rpc as rpc_mod, settings
 from .upgrade import notice, upgrade
 from .providers import DEFAULT, PROVIDERS
 from .sync import TRACKERS, Syncer, login, logout, status
-from .ui import Confirm, Prompt, banner, console, controls, error, now_playing, pick, warn
+from .ui import Confirm, Prompt, banner, console, controls, error, now_playing, pick, warn, watch_page
 from .utils import find_player, play
 
-SYNC_PCT = float(os.environ.get("TECHNO_SYNC_PCT", 80))
+def _pct():
+    return float(os.environ.get("TECHNO_SYNC_PCT") or settings.get("sync_pct"))
+
+
+def _rpc(a):
+    return None if a.no_rpc or not settings.get("rpc") else rpc_mod.get(config.load())
+
 
 
 def build_parser():
@@ -27,7 +33,7 @@ def build_parser():
         description="Watch anime from your terminal.",
         epilog="examples:\n  techno-cli naruto\n  techno-cli -p hianime one piece\n"
                "  techno-cli -a -q 720 frieren\n  techno-cli -e 5 -d bleach\n"
-               "  techno-cli --login anilist\n  techno-cli --doctor\n\n"
+               "  techno-cli --login anilist\n  techno-cli --doctor\n  techno-cli --config\n\n"
                f"community: {DISCORD}\n\n"
                "providers: animepahe (default), hianime, allanime (experimental), aniwatch (self-hosted API)\n"
                "trackers:  anilist, mal, kitsu (progress syncs automatically once logged in)\n\n"
@@ -40,11 +46,12 @@ def build_parser():
                "  TECHNO_SYNC_PCT          watched % needed to sync (default 80)",
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("query", nargs="*", help="search query")
-    ap.add_argument("-p", "--provider", choices=PROVIDERS, default=DEFAULT,
-                    help=f"provider to use (default: {DEFAULT})")
+    ap.add_argument("-p", "--provider", choices=PROVIDERS, default=settings.get("provider"),
+                    help="provider to use (default: from --config)")
     ap.add_argument("-a", "--all", action="store_true", help="search all providers")
-    ap.add_argument("-d", "--dub", action="store_true", help="play dubbed audio")
-    ap.add_argument("-q", "--quality", type=int, default=1080, help="preferred quality (default 1080)")
+    ap.add_argument("-d", "--dub", action="store_true", default=settings.get("dub"), help="play dubbed audio")
+    ap.add_argument("--sub", dest="dub", action="store_false", help="play subbed audio")
+    ap.add_argument("-q", "--quality", type=int, default=settings.get("quality"), help="preferred quality")
     ap.add_argument("-e", "--episode", help="start at this episode number")
     ap.add_argument("--login", choices=TRACKERS, metavar="TRACKER", help="log in to anilist, mal or kitsu")
     ap.add_argument("--token", help="AniList token to use with --login anilist (skips the prompt)")
@@ -52,6 +59,7 @@ def build_parser():
     ap.add_argument("--rpc-setup", action="store_true", help="set up Discord Rich Presence")
     ap.add_argument("--no-rpc", action="store_true", help="disable Discord Rich Presence this run")
     ap.add_argument("-D", "--discord", action="store_true", help="open the techno-cli Discord server")
+    ap.add_argument("--config", action="store_true", help="customize settings (full-screen page)")
     ap.add_argument("--upgrade", "--update", action="store_true", help="upgrade techno-cli from GitHub")
     ap.add_argument("--doctor", action="store_true", help="test every provider and show what works")
     ap.add_argument("--status", action="store_true", help="show tracker login status")
@@ -201,6 +209,8 @@ def rpc_setup():
 
 def _run():
     a = build_parser().parse_args()
+    if a.config:
+        return settings.menu()
     if a.discord:
         console.print(f"Join the techno-cli Discord: [bold cyan]{DISCORD}[/]")
         try:
@@ -225,7 +235,8 @@ def _run():
 
     find_player()
     banner(sorted(config.load().get("auth", {})) or None)
-    notice()
+    if settings.get("update_check"):
+        notice()
     q = " ".join(a.query) or Prompt.ask("[bold magenta]search anime[/]").strip()
 
     results = search_providers(q, a)
@@ -238,7 +249,11 @@ def _run():
         error("no episodes found")
         return
 
-    rpc = None if a.no_rpc else rpc_mod.get(config.load())
+    rpc = _rpc(a)
+    info = None
+    if (rpc and settings.get("rpc_covers")) or settings.get("watch_page"):
+        with console.status("Fetching anime info..."):
+            info = meta.fetch(title)
     sy = None if a.no_sync else Syncer(prov_name, aid, title, a.remap)
     if sy and not sy.active:
         sy = None
@@ -270,18 +285,28 @@ def _run():
             url, hdrs, sub = got
             try:
                 if rpc:
-                    rpc.update(title, label, used)
+                    rpc.update(title, label, used, info if settings.get("rpc_covers") else None)
                 pct = play(url, hdrs, f"{title} - {label}", sub)
                 if rpc:
                     rpc.clear()
                 n = ep_num(label)
-                if sy and sy.active and n and (pct < 0 or pct >= SYNC_PCT):
+                if sy and sy.active and n and (pct < 0 or pct >= _pct()):
                     sy.update(n)
                 elif sy and sy.active and pct >= 0:
-                    console.print(f"[dim]watched {pct:.0f}%, not synced (needs {SYNC_PCT:.0f}%)[/]")
+                    console.print(f"[dim]watched {pct:.0f}%, not synced (needs {_pct():.0f}%)[/]")
             except (Exception, SystemExit) as e:
                 error(_msg(e))
-        cmd = controls()
+        while True:
+            if settings.get("watch_page"):
+                status = f"{used} | {a.quality}p | {'dub' if a.dub else 'sub'} | sync: {', '.join(sy.maps) if sy and sy.active else 'off'}"
+                cmd = watch_page(info, title, label, idx, len(eps), status, settings.get("synopsis"))
+            else:
+                cmd = controls()
+            if cmd != "c":
+                break
+            settings.menu()
+            a.quality, a.dub = settings.get("quality"), settings.get("dub")
+            rpc = _rpc(a)
         if cmd == "n" and idx + 1 < len(eps):
             idx += 1
         elif cmd == "n":
