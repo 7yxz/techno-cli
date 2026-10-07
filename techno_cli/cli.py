@@ -9,7 +9,9 @@ import time
 from rich import box
 from rich.table import Table
 
-from . import __version__, config, rpc as rpc_mod
+import webbrowser
+
+from . import DISCORD, __version__, config, rpc as rpc_mod
 from .upgrade import notice, upgrade
 from .providers import DEFAULT, PROVIDERS
 from .sync import TRACKERS, Syncer, login, logout, status
@@ -26,6 +28,7 @@ def build_parser():
         epilog="examples:\n  techno-cli naruto\n  techno-cli -p hianime one piece\n"
                "  techno-cli -a -q 720 frieren\n  techno-cli -e 5 -d bleach\n"
                "  techno-cli --login anilist\n  techno-cli --doctor\n\n"
+               f"community: {DISCORD}\n\n"
                "providers: animepahe (default), hianime, allanime (experimental), aniwatch (self-hosted API)\n"
                "trackers:  anilist, mal, kitsu (progress syncs automatically once logged in)\n\n"
                "env (all optional):\n"
@@ -48,6 +51,7 @@ def build_parser():
     ap.add_argument("--logout", choices=TRACKERS, metavar="TRACKER", help="log out of a tracker")
     ap.add_argument("--rpc-setup", action="store_true", help="set up Discord Rich Presence")
     ap.add_argument("--no-rpc", action="store_true", help="disable Discord Rich Presence this run")
+    ap.add_argument("-D", "--discord", action="store_true", help="open the techno-cli Discord server")
     ap.add_argument("--upgrade", "--update", action="store_true", help="upgrade techno-cli from GitHub")
     ap.add_argument("--doctor", action="store_true", help="test every provider and show what works")
     ap.add_argument("--status", action="store_true", help="show tracker login status")
@@ -197,6 +201,13 @@ def rpc_setup():
 
 def _run():
     a = build_parser().parse_args()
+    if a.discord:
+        console.print(f"Join the techno-cli Discord: [bold cyan]{DISCORD}[/]")
+        try:
+            webbrowser.open(DISCORD)
+        except Exception:
+            pass
+        return
     if a.upgrade:
         return upgrade()
     if a.rpc_setup:

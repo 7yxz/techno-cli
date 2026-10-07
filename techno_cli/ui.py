@@ -49,28 +49,53 @@ def controls():
                       choices=["n", "p", "r", "s", "q"], default="n", show_choices=False)
 
 
+def _pager(items, label):
+    """Full-screen picker used when fzf is missing: filter by typing, number to select."""
+    page, q = 0, ""
+    with console.screen():
+        while True:
+            view = [(i, t) for i, (t, _) in enumerate(items, 1) if q.lower() in t.lower()]
+            size = max(5, console.size.height - 9)
+            pages = max(1, -(-len(view) // size))
+            page = min(page, pages - 1)
+            console.clear()
+            console.print(Panel(f"[bold]{label}[/]   filter: [cyan]{q or '-'}[/]   page {page + 1}/{pages}",
+                                border_style=ACCENT, box=box.ROUNDED))
+            table = Table(box=box.SIMPLE_HEAD, border_style=ACCENT, header_style="bold cyan")
+            table.add_column("#", justify="right", style="dim")
+            table.add_column(label)
+            for i, t in view[page * size:(page + 1) * size]:
+                table.add_row(str(i), t)
+            console.print(table)
+            console.print("[dim]number: select  |  text: filter  |  enter: clear filter  |  n/p: page  |  q: cancel[/]")
+            cmd = Prompt.ask(">").strip()
+            if cmd.isdigit() and any(i == int(cmd) for i, _ in view):
+                return items[int(cmd) - 1][1]
+            if cmd == "n":
+                page += 1
+            elif cmd == "p":
+                page = max(0, page - 1)
+            elif cmd == "q":
+                sys.exit(0)
+            else:
+                q, page = cmd, 0
+
+
 def pick(items, label):
-    """items: list of (text, value). Returns the chosen value."""
+    """items: list of (text, value). Opens a full-screen picker and returns the chosen value."""
     if not items:
         error("nothing found")
         sys.exit(1)
     if shutil.which("fzf"):
         lines = [f"{i}\t{t}" for i, (t, _) in enumerate(items)]
         p = subprocess.run(
-            ["fzf", "--with-nth=2..", "--delimiter=\t", "--reverse", "--border=rounded",
-             "--height=70%", "--cycle", "--prompt", label + " > ",
-             "--color=hl:magenta,hl+:magenta,pointer:cyan,prompt:cyan,border:magenta"],
+            ["fzf", "--with-nth=2..", "--delimiter=\t", "--layout=reverse", "--border=rounded",
+             "--cycle", "--info=inline", f"--prompt={label} > ",
+             f"--header={label}   enter: select   esc: cancel   type to filter",
+             "--preview=echo {2..}", "--preview-window=down:3:wrap:border-rounded",
+             "--color=hl:magenta,hl+:magenta,pointer:cyan,prompt:cyan,border:magenta,header:dim"],
             input="\n".join(lines), text=True, stdout=subprocess.PIPE)
         if not p.stdout.strip():
             sys.exit(0)
         return items[int(p.stdout.split("\t")[0])][1]
-    table = Table(box=box.SIMPLE_HEAD, border_style=ACCENT, header_style="bold cyan")
-    table.add_column("#", justify="right", style="dim")
-    table.add_column(label)
-    for i, (t, _) in enumerate(items, 1):
-        table.add_row(str(i), t)
-    console.print(table)
-    while True:
-        n = Prompt.ask(f"[cyan]{label}[/] #")
-        if n.strip().isdigit() and 1 <= int(n) <= len(items):
-            return items[int(n) - 1][1]
+    return _pager(items, label)

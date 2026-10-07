@@ -53,6 +53,7 @@ Controls after each episode: `n` next (default, just press Enter), `p` previous,
 | `--remap` | re-pick the tracker match for this anime |
 | `--rpc-setup` / `--no-rpc` | set up or disable Discord presence |
 | `--doctor` | test every provider |
+| `-D, --discord` | open the techno-cli Discord server |
 | `--upgrade` | update to the latest version |
 | `-v, --version` | show version |
 
@@ -127,6 +128,10 @@ class MySite:
     def stream(self, id, ep_id, quality, dub=False):  # -> (url, headers, subtitle_or_None)
         ...
 ```
+
+## Community
+
+Questions, bug reports or just want to hang out? Join the Discord: https://discord.gg/U953H5hmPG (or run `techno-cli --discord`).
 
 ## Credits and license
 
