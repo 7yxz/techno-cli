@@ -38,11 +38,11 @@ techno-cli -e 5 -d bleach
 techno-cli -help
 ```
 
-Controls after each episode: `n` next (default, just press Enter), `p` previous, `r` replay, `s` select episode, `q` quit.
+Controls after each episode: `n` next (default, just press Enter), `p` previous, `r` replay, `f` refresh (clears the terminal and reloads the video from a different source), `s` select episode, `q` quit.
 
 | Flag | Meaning |
 |------|---------|
-| `-p, --provider` | animepahe (default), hianime, allanime, aniwatch |
+| `-p, --provider` | animepahe (default), hianime, allanime |
 | `-a, --all` | search animepahe and hianime together |
 | `-d, --dub` | dubbed audio |
 | `-q, --quality` | preferred quality, default 1080 |
@@ -66,7 +66,6 @@ Controls after each episode: `n` next (default, just press Enter), `p` previous,
 | animepahe | Default. Finds a working mirror and handles cookies by itself. Often behind Cloudflare, so it may fail. |
 | hianime | Direct scraping, no server needed. Uses `curl_cffi` to look like Chrome. |
 | allanime | Experimental, use with `-p allanime`. Uses rotating keys published by anipy-cli. |
-| aniwatch | Optional. Needs a self-hosted [aniwatch-api](https://github.com/ghoshRitesh12/aniwatch-api), set `HIANIME_API`. |
 
 If the provider you choose fails, techno-cli tries the others and only shows an error when all of them fail. Working mirrors are remembered in the config.
 
@@ -113,6 +112,7 @@ rm -rf ~/.config/techno-cli  # remove saved logins and settings
 
 ## Troubleshooting
 
+- **Video window is blank or frozen**: press `f` on the info page. It clears the terminal and reloads the episode from the next source. If it keeps happening, open `techno-cli --config` and set `mpv_args` to something like `--hwdec=no` or `--vo=gpu`.
 - **Everything fails**: run `techno-cli --doctor` and look at which step breaks for each provider.
 - **Cloudflare blocks**: make sure `curl_cffi` is installed (`pipx inject techno-cli curl_cffi`). Providers change often, so a different one may work better today.
 - **Old version after updating**: run `which -a techno-cli` and delete any copy that is not the pipx one.
@@ -121,7 +121,7 @@ rm -rf ~/.config/techno-cli  # remove saved logins and settings
 
 ## Environment variables
 
-All optional: `PAHE_URL`, `PAHE_COOKIE`, `HIANIME_URL`, `HIANIME_API`, `TECHNO_PLAYER` (default mpv), `TECHNO_SYNC_PCT`, `DISCORD_CLIENT_ID`, `TECHNO_NO_UPDATE_CHECK`.
+All optional: `PAHE_URL`, `PAHE_COOKIE`, `HIANIME_URL`, `TECHNO_PLAYER` (default mpv), `TECHNO_SYNC_PCT`, `DISCORD_CLIENT_ID`, `TECHNO_NO_UPDATE_CHECK`.
 
 ## Adding a provider
 

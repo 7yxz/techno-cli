@@ -77,6 +77,9 @@ def play(url, headers, title, sub=None):
         cmd.insert(1, f"--http-header-fields={hf}")
     if sub:
         cmd.insert(1, f"--sub-file={sub}")
+    import shlex
+    from . import settings
+    cmd[1:1] = shlex.split(settings.get("mpv_args") or "")
     if not os.path.basename(player).startswith("mpv"):
         subprocess.run(cmd)
         return -1.0

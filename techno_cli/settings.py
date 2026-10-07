@@ -11,6 +11,7 @@ SCHEMA = {
     "rpc_covers": (True, "bool", None, "AniList cover and info in presence"),
     "watch_page": (True, "bool", None, "info page after each episode"),
     "synopsis": (True, "bool", None, "synopsis on the info page"),
+    "mpv_args": ("", "text", None, "extra player args, e.g. --hwdec=no --vo=gpu"),
     "update_check": (True, "bool", None, "daily update notice"),
 }
 
@@ -26,7 +27,7 @@ def set_(key, val):
 
 
 def _fmt(v):
-    return ("on" if v else "off") if isinstance(v, bool) else str(v)
+    return ("on" if v else "off") if isinstance(v, bool) else (str(v) or "-")
 
 
 def menu():
@@ -47,6 +48,8 @@ def menu():
                 set_(key, pick([(str(c), c) for c in choices], key))
             except SystemExit:
                 continue
+        elif kind == "text":
+            set_(key, Prompt.ask(key, default=str(get(key)), show_default=True).strip())
         else:
             v = Prompt.ask(key, default=str(get(key)))
             try:

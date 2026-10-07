@@ -44,11 +44,11 @@ def now_playing(title, label, provider, quality, dub):
                         border_style=ACCENT, box=box.ROUNDED))
 
 
-CONTROLS = "[cyan]n[/]ext  [cyan]p[/]rev  [cyan]r[/]eplay  [cyan]s[/]elect  [cyan]c[/]onfig  [cyan]q[/]uit"
+CONTROLS = "[cyan]n[/]ext  [cyan]p[/]rev  [cyan]r[/]eplay  re[cyan]f[/]resh  [cyan]s[/]elect  [cyan]c[/]onfig  [cyan]q[/]uit"
 
 
 def controls():
-    return Prompt.ask(CONTROLS, choices=["n", "p", "r", "s", "c", "q"], default="n", show_choices=False)
+    return Prompt.ask(CONTROLS, choices=["n", "p", "r", "f", "s", "c", "q"], default="n", show_choices=False)
 
 
 def watch_page(info, title, label, idx, total, status, synopsis=True):

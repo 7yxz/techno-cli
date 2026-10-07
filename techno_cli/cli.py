@@ -35,12 +35,11 @@ def build_parser():
                "  techno-cli -a -q 720 frieren\n  techno-cli -e 5 -d bleach\n"
                "  techno-cli --login anilist\n  techno-cli --doctor\n  techno-cli --config\n\n"
                f"community: {DISCORD}\n\n"
-               "providers: animepahe (default), hianime, allanime (experimental), aniwatch (self-hosted API)\n"
+               "providers: animepahe (default), hianime, allanime (experimental)\n"
                "trackers:  anilist, mal, kitsu (progress syncs automatically once logged in)\n\n"
                "env (all optional):\n"
                "  PAHE_URL / PAHE_COOKIE   override animepahe mirror / add cookie\n"
                "  HIANIME_URL              override hianime mirror\n"
-               "  HIANIME_API              aniwatch-api URL (default http://localhost:4000)\n"
                "  TECHNO_PLAYER            player binary (default mpv)\n"
                "  TECHNO_NO_UPDATE_CHECK   set to stop the daily update notice\n"
                "  TECHNO_SYNC_PCT          watched % needed to sync (default 80)",
@@ -70,7 +69,7 @@ def build_parser():
     return ap
 
 
-FALLBACKS = [n for n in PROVIDERS if n != "aniwatch" or os.environ.get("HIANIME_API")]
+FALLBACKS = list(PROVIDERS)
 
 
 def _msg(e):
@@ -114,17 +113,18 @@ def search_providers(q, a):
     return results
 
 
-def get_stream(prov, prov_name, aid, epid, label, title, a):
+def get_stream(prov, prov_name, aid, epid, label, title, a, avoid=()):
     """Try the chosen provider, then the same episode on the other providers."""
     errs = []
-    try:
-        with console.status("Fetching stream..."):
-            return prov.stream(aid, epid, a.quality, a.dub), prov_name, errs
-    except (Exception, SystemExit) as e:
-        errs.append((prov_name, _msg(e)))
+    if prov_name not in avoid:
+        try:
+            with console.status("Fetching stream..."):
+                return prov.stream(aid, epid, a.quality, a.dub), prov_name, errs
+        except (Exception, SystemExit) as e:
+            errs.append((prov_name, _msg(e)))
     n = ep_num(label)
     for name in FALLBACKS if n else []:
-        if name == prov_name:
+        if name == prov_name or name in avoid:
             continue
         try:
             with console.status(f"Trying {name}..."):
@@ -141,6 +141,8 @@ def get_stream(prov, prov_name, aid, epid, label, title, a):
             return got, name, errs
         except (Exception, SystemExit) as e:
             errs.append((name, _msg(e)))
+    if avoid:  # nothing else worked, start over with every source
+        return get_stream(prov, prov_name, aid, epid, label, title, a)
     return None, prov_name, errs
 
 
@@ -169,9 +171,6 @@ def doctor():
     for c in ("provider", "search", "episodes", "stream", "notes"):
         t.add_column(c)
     for name, cls in PROVIDERS.items():
-        if name == "aniwatch" and not os.environ.get("HIANIME_API"):
-            t.add_row(name, "-", "-", "-", "[dim]skipped (HIANIME_API not set)[/]")
-            continue
         cells, note, state = [], "", {}
         with console.status(f"Testing {name}..."):
             p = cls()
@@ -271,11 +270,12 @@ def _run():
         else:
             idx = choose_episode(eps)
 
+    avoid = set()
     while True:
         label, epid = eps[idx]
         console.rule(style="dim")
         now_playing(title, label, prov_name, a.quality, a.dub)
-        got, used, errs = get_stream(prov, prov_name, aid, epid, label, title, a)
+        got, used, errs = get_stream(prov, prov_name, aid, epid, label, title, a, avoid)
         if not got:
             error("all providers failed for this episode")
             for n, m in errs:
@@ -307,6 +307,11 @@ def _run():
             settings.menu()
             a.quality, a.dub = settings.get("quality"), settings.get("dub")
             rpc = _rpc(a)
+        if cmd == "f":  # refresh: clean the terminal and reload from a different source
+            avoid.add(used)
+            console.clear()
+            continue
+        avoid.clear()
         if cmd == "n" and idx + 1 < len(eps):
             idx += 1
         elif cmd == "n":
